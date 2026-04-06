@@ -47,6 +47,8 @@ Two authentication modes are supported:
 - Phone number + OTP verification per session
 - Lightweight — no persistent profile
 - Suitable for one-time or infrequent participants
+- **Auto-deleted 15 minutes after the event's game close time** (the end time set during event creation — not related to the deadline)
+- If the guest is on multiple events, the account persists until 15 minutes after the **last** event's close time
 
 **Suggestion:** For both modes, phone number + OTP should be the primary auth method (since UPI payments are phone-linked, this creates a natural identity anchor). Passwords can be optional for regular accounts as a convenience for returning users. This keeps onboarding friction low while maintaining identity linkage to payments.
 
@@ -293,6 +295,7 @@ EVENT_CANCELLED (by host)
 | BR-18 | WhatsApp notifications are out of app scope — managed externally |
 | BR-19 | All slot statuses (main list + waiting list + confirmation state) are visible to all participants |
 | BR-20 | Hosts can create recurring event templates with pre-filled venue, deadline offset, and defaults |
+| BR-21 | Temporary accounts are auto-deleted 15 minutes after the event's game close time (not the deadline) |
 
 ---
 
