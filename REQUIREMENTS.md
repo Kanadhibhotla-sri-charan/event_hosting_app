@@ -144,7 +144,7 @@ The time given to a promoted waiting list member to complete payment scales base
 ### 4.10 Notifications
 
 - **Push notifications** for: slot promotion, payment window reminders, event updates, deadline reminders.
-- **WhatsApp notifications** (via external WhatsApp integration) for critical alerts: promotion to main list, payment window expiry warning.
+- WhatsApp communication is handled **externally** by the host/group — not part of the app.
 
 ### 4.11 Event Lifecycle
 
@@ -266,28 +266,34 @@ EVENT_CANCELLED (by host)
 - Venue booking and venue payment
 - In-app UPI payment processing (Phase 1 — payments happen externally)
 - Chat/messaging between participants
-- Recurring/repeating event scheduling (unless specified)
+- WhatsApp integration (handled externally by host/group)
 - Automated UTR verification via payment gateway (Phase 1 — deferred to Phase 2)
 - Automated in-app refund processing (Phase 1 — deferred to Phase 2)
 
 ---
 
-## 10. New Considerations Surfaced
+## 10. Resolved New Considerations
 
-These are additional items to think about before technical design:
-
-**NC-1. Co-Host Permission Model:** Do co-hosts have identical permissions as the host (edit event, cancel event, manage refunds)? Or are there any restrictions?
-
-**NC-2. WhatsApp Integration Scope:** Is WhatsApp notification handled via a WhatsApp Business API, or a simpler approach like click-to-send links? This has significant technical implications.
-
-**NC-3. Slot Reservation Visibility:** When a slot is reserved (10-min window), should other users see "X slots available (1 reserved)" or just "X slots available"? Transparency vs. simplicity.
-
-**NC-4. Host Discretion UX (Q13):** For promotions in-progress at deadline, what does the host interface look like? A simple approve/void button?
-
-**NC-5. Event Recurrence Pattern:** You mentioned "deadline would mostly be same for all game days" — does this suggest a recurring event template feature would be valuable? (e.g., "Every Saturday, same venue, same deadline offset")
-
-**NC-6. Minimum Payment Window Floor:** Even with the dynamic window, should there be an absolute minimum (e.g., 10 minutes) below which promotions are simply not allowed? If event starts in 20 minutes and window is 15 minutes, is that realistic?
+| # | Consideration | Resolution |
+|---|---|---|
+| NC-1 | Co-Host Permission Model | Co-hosts have **identical permissions** as the host. No tiered permission levels — keep it simple. |
+| NC-2 | WhatsApp Integration | WhatsApp is **completely independent** of the app. Not integrated — handled externally by the host/group. No technical scope for the app. |
+| NC-3 | Slot Reservation Visibility | Yes — all main list and waiting list slots with their **confirmation status** are visible to all users (transparent model). |
+| NC-4 | Host Discretion UX | Simple approve/void controls for in-progress promotions at deadline. UI should surface required features cleanly — no over-engineering. |
+| NC-5 | Event Recurrence / Templates | **Yes** — recurring event template feature is valuable. Hosts can create templates (e.g., "Every Saturday, same venue, same deadline offset") to quickly spin up recurring game days. |
+| NC-6 | Minimum Payment Window Floor | Not a concern in practice — **deadline closes well before event time** (20+ min buffer is the agreed norm). Post-deadline, everything is frozen. Edge cases at deadline boundary are handled by host discretion (NC-4 / Q13). |
 
 ---
 
-*All original open questions have been resolved. Items in Section 10 (New Considerations) are non-blocking but recommended for discussion before technical design.*
+## 11. Additional Business Rules (from NC resolutions)
+
+| # | Rule |
+|---|---|
+| BR-17 | Co-hosts have identical permissions to the host (no tiered access) |
+| BR-18 | WhatsApp notifications are out of app scope — managed externally |
+| BR-19 | All slot statuses (main list + waiting list + confirmation state) are visible to all participants |
+| BR-20 | Hosts can create recurring event templates with pre-filled venue, deadline offset, and defaults |
+
+---
+
+*All open questions and new considerations have been resolved. This document is ready for technical design phase.*
