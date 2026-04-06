@@ -1,7 +1,7 @@
 # Badminton Event Coordination App — Requirements Document
 
-**Version:** 1.0 (Draft)
-**Status:** Requirements Refinement Phase
+**Version:** 1.1
+**Status:** Requirements Refinement Phase — Open Questions Resolved
 
 ---
 
@@ -15,21 +15,46 @@ A mobile-first web application for organizing badminton games. The app handles p
 
 ## 2. User Roles
 
-### 2.1 Host
+### 2.1 Host (& Co-Hosts)
 - Creates and manages events
+- Can assign co-hosts with equivalent management permissions
 - Monitors participant lists and payment statuses
 - Manages refund lifecycle post-deadline
+- Can edit event details anytime **before the deadline**
+- Can cancel an entire event (triggers refunds for all confirmed participants)
+- Sets event auto-close time at event creation
 
 ### 2.2 Participant (User)
 - Views event details
 - Joins events by submitting UTR payment confirmation or expressing waiting list interest
 - Can withdraw from events (subject to deadline rules)
+- Can participate in multiple events simultaneously (main list or waiting list)
+- Can voluntarily leave the waiting list at any time
 
 ---
 
-## 3. Functional Requirements
+## 3. Authentication
 
-### 3.1 Event Creation (Host)
+Two authentication modes are supported:
+
+### 3.1 Regular Account
+- One-time registration with phone number + OTP verification
+- Password-based login for returning sessions
+- Persistent profile across all events
+- Recommended for frequent players
+
+### 3.2 Temporary (Guest) Account
+- Phone number + OTP verification per session
+- Lightweight — no persistent profile
+- Suitable for one-time or infrequent participants
+
+**Suggestion:** For both modes, phone number + OTP should be the primary auth method (since UPI payments are phone-linked, this creates a natural identity anchor). Passwords can be optional for regular accounts as a convenience for returning users. This keeps onboarding friction low while maintaining identity linkage to payments.
+
+---
+
+## 4. Functional Requirements
+
+### 4.1 Event Creation (Host)
 
 | Field | Description |
 |---|---|
@@ -40,95 +65,157 @@ A mobile-first web application for organizing badminton games. The app handles p
 | Waiting List Capacity | Maximum number of users allowed on the waiting list |
 | Payment Per Head | Amount each main list participant must pay |
 | UPI ID | Host's UPI ID displayed to participants for payment |
-| Deadline | Cutoff datetime after which drops, additions, and refunds follow stricter rules |
+| Deadline | Cutoff datetime for drops/promotions (typically consistent across game days so users learn the pattern) |
+| Event Auto-Close Time | Datetime after which event is automatically archived (set by host at creation) |
+| Co-Hosts | Optional list of users with host-level permissions for this event |
 
-### 3.2 Joining an Event (Participant)
+**Editability:** Host can edit all event details **anytime before the deadline**. Post-deadline, event details are frozen.
+
+### 4.2 Joining an Event (Participant)
 
 1. Participant opens the app and views event details (venue, date, time, payment amount, UPI ID).
 2. Participant makes payment **externally** via any UPI app to the displayed UPI ID.
 3. Participant enters the **UTR (Unique Transaction Reference)** number in the app.
 4. The **server-side timestamp** of UTR submission determines the participant's position in the main list.
-5. If the main list is full at the time of UTR submission, the participant is **not** added and must be informed (see open question Q3 below).
+5. **Slot reservation:** If the main list is nearly full (e.g., last few slots), when a participant initiates UTR entry, a slot is **reserved for 10 minutes**. If UTR is not submitted within 10 minutes, the reservation expires and the slot reopens.
 
-### 3.3 Waiting List
+### 4.3 Waiting List
 
-1. Once the main list is full, additional users can **express interest** to join the waiting list.
+1. Once the main list is full (and no reserved slots available), additional users can **express interest** to join the waiting list.
 2. Waiting list members do **not** pay upfront — they only register interest.
 3. Waiting list order is determined by the **server-side timestamp** of interest registration.
 4. Waiting list is capped at the host-defined waiting list capacity.
+5. A waiting list member can **voluntarily leave** at any time; the list re-orders automatically.
 
-### 3.4 Main List Drop & Waiting List Promotion (Pre-Deadline)
+### 4.4 Main List Drop & Waiting List Promotion (Pre-Deadline)
 
 1. A main list participant may **withdraw** before the deadline.
-2. The **first person on the waiting list** is notified of the open slot.
-3. The promoted waiting list member must pay and submit their UTR within a defined window (see open question Q5).
-4. Upon UTR confirmation, the waiting list member is added to the main list.
-5. The main list order updates to reflect the new member's confirmed position.
-6. The withdrawn participant becomes eligible for a refund (processed post-deadline — see 3.6).
+2. If multiple members drop simultaneously, **all corresponding waiting list members are notified at once**, but strict waiting list order is maintained (first in line gets first slot, second gets second, etc.).
+3. The promoted waiting list member must pay and submit their UTR within a **dynamic time window** (see Section 4.5).
+4. If the promoted member does **not** pay within the window, their promotion expires and the **next waiting list member** is notified.
+5. Upon UTR confirmation, the waiting list member is added to the main list.
+6. The withdrawn participant becomes eligible for a refund (processed post-deadline — see 4.7).
 
-### 3.5 Post-Deadline Rules
+### 4.5 Promotion Payment Window (Dynamic)
 
-- **No new drops allowed** — participants who withdraw post-deadline do **not** receive refunds.
+The time given to a promoted waiting list member to complete payment scales based on how close the event is:
+
+| Time Until Event Start | Payment Window |
+|---|---|
+| > 24 hours | 2 hours |
+| 6–24 hours | 1 hour |
+| 2–6 hours | 30 minutes |
+| < 2 hours | 15 minutes |
+
+**Suggestion:** These are recommended defaults. Could be made host-configurable in a future version. The key principle is: the closer the event, the shorter the window, to avoid slots going empty.
+
+### 4.6 Post-Deadline Rules
+
+- **No new drops with refund** — participants who withdraw post-deadline do **not** receive refunds.
 - **No waiting list promotions** — the main list is frozen after the deadline.
+- **Promotion-in-progress at deadline:** Left to the host's discretion. Host can manually approve or void the in-progress promotion.
 - Post-deadline, if the main list is not full (due to pre-deadline drops that were not backfilled), remaining spots are simply unfilled.
 
-### 3.6 Refund Rules
+### 4.7 Refund Rules
 
 - Refunds for pre-deadline withdrawals are processed **only after**:
   1. The deadline has passed, **AND**
   2. All main list players are confirmed (i.e., every slot is either filled or explicitly unfillable)
-- Refund processing is managed by the host **outside the app** (see open question Q7).
-- The app tracks refund status: `pending` → `refunded`.
+- **Event cancellation by host:** All confirmed participants receive refunds (same conditions apply).
+- **Phase 1 (MVP):** Refunds tracked in-app, processed manually by host outside the app. App tracks status: `refund_pending` → `refunded`.
+- **Phase 2 (Future):** Automated in-app UPI refund processing (pending complexity assessment).
 
-### 3.7 List Visibility
+### 4.8 UTR Validation
+
+- **Phase 1 (MVP):** Trust-based with **duplicate detection**.
+  - Participant self-reports the UTR number.
+  - App checks for **duplicate UTR entries** across all events — rejects duplicates.
+  - UTR format validation (standard UTR is 12-digit alphanumeric).
+  - Host can flag/dispute suspicious UTRs manually.
+- **Phase 2 (Future):** Automated UTR verification against UPI transaction records via payment gateway API (pending feasibility and cost assessment).
+
+**Suggestion:** Duplicate detection + format validation covers the most common abuse vectors at low complexity. Full UPI verification requires payment gateway integration which adds significant scope — better suited for a later phase.
+
+### 4.9 List Visibility
 
 - Both the main list and waiting list (with ordering) should be visible to all participants.
-- Payment status of each main list member should be visible to the host.
+- Payment status of each main list member should be visible to the host (and co-hosts).
+
+### 4.10 Notifications
+
+- **Push notifications** for: slot promotion, payment window reminders, event updates, deadline reminders.
+- **WhatsApp notifications** (via external WhatsApp integration) for critical alerts: promotion to main list, payment window expiry warning.
+
+### 4.11 Event Lifecycle
+
+1. **Created** → Host sets up event, visible to participants.
+2. **Open** → Participants join main list / waiting list.
+3. **Deadline Passed** → Main list frozen, refund processing begins.
+4. **In Progress** → Event is happening.
+5. **Auto-Closed** → Event auto-closes at the host-defined auto-close time.
+6. **Archived** → Event moves to history view, accessible by all past participants and host.
+7. **Cancelled** → Host cancels event at any point; triggers refund flow for all confirmed participants.
 
 ---
 
-## 4. Participant State Transitions
+## 5. Participant State Transitions
 
 ```
 [New User]
     │
-    ├──(Main list has space + UTR submitted)──► MAIN_LIST_CONFIRMED
+    ├──(Main list has space)──► SLOT_RESERVED (10 min to submit UTR)
+    │                               │
+    │                    ┌──────────┴──────────┐
+    │                    │                     │
+    │          (UTR submitted in time)  (10 min expires)
+    │                    │                     │
+    │                    ▼                     ▼
+    │          MAIN_LIST_CONFIRMED      RESERVATION_EXPIRED
+    │                                   (slot reopens)
     │
     └──(Main list full + interest registered)──► WAITING_LIST
                                                      │
-                          (Slot opens, notified)─────┘
+                    (Slot opens, notified)────────────┘
                                 │
                     ┌───────────┴───────────┐
                     │                       │
           (Pays within window)    (Does not pay in time)
                     │                       │
                     ▼                       ▼
-          MAIN_LIST_CONFIRMED        WAITING_LIST_EXPIRED
+          MAIN_LIST_CONFIRMED        PROMOTION_EXPIRED
                                     (next person notified)
+
+WAITING_LIST
+    │
+    └──(Voluntarily leaves)──► REMOVED (list re-orders)
 
 MAIN_LIST_CONFIRMED
     │
     ├──(Withdraws pre-deadline)──► DROPPED_REFUND_PENDING ──► REFUNDED
     │
     └──(Withdraws post-deadline)──► DROPPED_NO_REFUND
+
+EVENT_CANCELLED (by host)
+    │
+    └──(All confirmed members)──► REFUND_PENDING ──► REFUNDED
 ```
 
 ---
 
-## 5. Payment Status Tracking
+## 6. Payment Status Tracking
 
 | Status | Meaning |
 |---|---|
 | `not_required` | Waiting list member — no payment needed yet |
-| `pending` | Waiting list member promoted — payment expected |
+| `awaiting_utr` | Slot reserved or promoted — UTR submission expected within time window |
 | `confirmed` | UTR submitted and accepted |
-| `refund_pending` | Dropped pre-deadline — refund owed but not yet processed |
+| `refund_pending` | Dropped pre-deadline or event cancelled — refund owed but not yet processed |
 | `refunded` | Refund completed |
 | `forfeited` | Dropped post-deadline — no refund |
 
 ---
 
-## 6. Business Rules Summary
+## 7. Business Rules Summary
 
 | # | Rule |
 |---|---|
@@ -136,63 +223,71 @@ MAIN_LIST_CONFIRMED
 | BR-2 | Waiting list order is determined by server-side timestamp of interest registration |
 | BR-3 | Waiting list members do not pay upfront |
 | BR-4 | When a main list member drops pre-deadline, the first waiting list member is notified |
-| BR-5 | Promoted waiting list member must pay within a defined time window |
+| BR-5 | Promoted waiting list member must pay within a dynamic time window based on proximity to event |
 | BR-6 | Post-deadline: no drops with refund, no waiting list promotions |
 | BR-7 | Refunds are processed only after deadline passes AND all slots are confirmed |
 | BR-8 | Event capacity is between 20 and 36 participants |
+| BR-9 | Slot reservation lasts 10 minutes for UTR submission when main list is nearly full |
+| BR-10 | Duplicate UTR numbers are rejected across all events |
+| BR-11 | Host can edit event details anytime before the deadline |
+| BR-12 | Multiple simultaneous drops notify multiple waiting list members at once, in strict order |
+| BR-13 | Waiting list auto-reorders when a member voluntarily leaves |
+| BR-14 | Events auto-close at host-defined time and move to archive |
+| BR-15 | Host can cancel an event at any time; all confirmed participants receive refunds |
+| BR-16 | Participants can be on main/waiting lists of multiple events simultaneously |
 
 ---
 
-## 7. Open Questions & Gaps
+## 8. Resolved Questions
 
-These items need clarification before moving to design/technical phases:
-
-### Participant Flow
-**Q1.** Is there any **authentication/login** requirement, or can users join events via a shared link without accounts?
-
-**Q2.** Can a host **edit event details** (venue, time, payment amount) after creation? If so, until when?
-
-**Q3.** If the main list is full and a participant has **already made a UPI payment** but tries to submit a UTR — what happens? They've already paid externally. Does the app warn them before UTR entry that the list is full? Or are they auto-added to the waiting list with their UTR recorded?
-
-**Q4.** Can a participant be on the **waiting list for multiple events** simultaneously? Can they be on the **main list of multiple events**?
-
-### Waiting List Promotion
-**Q5.** When a waiting list member is promoted, how long do they have to **complete payment**? Is there a configurable time window (e.g., 1 hour, 2 hours)? What happens if they don't pay in time — does the slot go to the next person?
-
-**Q6.** How is the promoted waiting list member **notified**? (Push notification, SMS, WhatsApp, in-app only?)
-
-### Payments & Refunds
-**Q7.** Are refunds processed **within the app** (automated UPI refund) or **manually by the host** outside the app? If manual, does the app just track refund status?
-
-**Q8.** Is there any **UTR validation** — does the app verify the UTR against actual UPI transaction records, or is it trust-based (participant self-reports)?
-
-**Q9.** What prevents a participant from entering a **fake/duplicate UTR**? Is duplicate UTR detection needed?
-
-### Event Lifecycle
-**Q10.** What happens **after the event date passes**? Is there an archive/history view? Does the event auto-close?
-
-**Q11.** Can a host **cancel an entire event**? If so, what is the refund policy for all confirmed participants?
-
-**Q12.** Can there be **multiple hosts / co-hosts** for a single event?
-
-### Edge Cases
-**Q13.** If a waiting list member is promoted but the **deadline passes** before they can pay — what happens? Is their promotion voided?
-
-**Q14.** What if **multiple main list members drop simultaneously** — are multiple waiting list members notified at once, or sequentially?
-
-**Q15.** Is there a minimum number of participants required for an event to proceed? If too many drop and the event becomes unviable, is there a cancellation flow?
-
-**Q16.** Can a **waiting list member voluntarily leave** the waiting list?
+| # | Question | Resolution |
+|---|---|---|
+| Q1 | Authentication | Two modes: Regular (persistent account, phone+OTP+password) and Temporary (phone+OTP per session) |
+| Q2 | Host editing | Allowed anytime before deadline; frozen after deadline |
+| Q3 | Full list + payment already made | 10-minute slot reservation when initiating UTR entry prevents race condition |
+| Q4 | Multi-event participation | Yes — participants can be on main/waiting lists of multiple events; order based on timestamps |
+| Q5 | Promotion payment window | Dynamic: 2hr / 1hr / 30min / 15min based on time until event. Expires → next person notified |
+| Q6 | Notification channels | Push notifications + WhatsApp for critical alerts |
+| Q7 | Refund processing | Phase 1: manual (tracked in-app). Phase 2: automated in-app UPI refunds |
+| Q8 | UTR validation | Phase 1: trust-based + duplicate detection + format validation. Phase 2: UPI gateway verification |
+| Q9 | Fake/duplicate UTR | Duplicate detection across all events + format validation in Phase 1 |
+| Q10 | Post-event lifecycle | Host sets auto-close time at creation; event auto-closes and archives |
+| Q11 | Event cancellation | Yes, host can cancel; all confirmed participants get refunds |
+| Q12 | Co-hosts | Yes, multiple co-hosts supported with equivalent permissions |
+| Q13 | Promotion vs deadline | Left to host discretion for in-progress promotions at deadline |
+| Q14 | Simultaneous drops | All corresponding WL members notified at once, strict order maintained |
+| Q15 | Minimum participants | No enforced minimum; host can manually cancel if event becomes unviable |
+| Q16 | WL voluntary leave | Yes, list auto-reorders |
 
 ---
 
-## 8. Out of Scope (Confirmed)
+## 9. Out of Scope (Confirmed)
 
 - Venue booking and venue payment
-- In-app UPI payment processing (payments happen externally)
+- In-app UPI payment processing (Phase 1 — payments happen externally)
 - Chat/messaging between participants
 - Recurring/repeating event scheduling (unless specified)
+- Automated UTR verification via payment gateway (Phase 1 — deferred to Phase 2)
+- Automated in-app refund processing (Phase 1 — deferred to Phase 2)
 
 ---
 
-*This document captures requirements as understood. All items in Section 7 (Open Questions) should be resolved before proceeding to technical design.*
+## 10. New Considerations Surfaced
+
+These are additional items to think about before technical design:
+
+**NC-1. Co-Host Permission Model:** Do co-hosts have identical permissions as the host (edit event, cancel event, manage refunds)? Or are there any restrictions?
+
+**NC-2. WhatsApp Integration Scope:** Is WhatsApp notification handled via a WhatsApp Business API, or a simpler approach like click-to-send links? This has significant technical implications.
+
+**NC-3. Slot Reservation Visibility:** When a slot is reserved (10-min window), should other users see "X slots available (1 reserved)" or just "X slots available"? Transparency vs. simplicity.
+
+**NC-4. Host Discretion UX (Q13):** For promotions in-progress at deadline, what does the host interface look like? A simple approve/void button?
+
+**NC-5. Event Recurrence Pattern:** You mentioned "deadline would mostly be same for all game days" — does this suggest a recurring event template feature would be valuable? (e.g., "Every Saturday, same venue, same deadline offset")
+
+**NC-6. Minimum Payment Window Floor:** Even with the dynamic window, should there be an absolute minimum (e.g., 10 minutes) below which promotions are simply not allowed? If event starts in 20 minutes and window is 15 minutes, is that realistic?
+
+---
+
+*All original open questions have been resolved. Items in Section 10 (New Considerations) are non-blocking but recommended for discussion before technical design.*
