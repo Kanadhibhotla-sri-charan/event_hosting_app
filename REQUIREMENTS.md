@@ -299,4 +299,134 @@ EVENT_CANCELLED (by host)
 
 ---
 
-*All open questions and new considerations have been resolved. This document is ready for technical design phase.*
+## 12. Tech Stack Recommendations
+
+*Preliminary recommendations — subject to refinement in technical design phase.*
+
+### 12.1 Frontend — Progressive Web App (PWA)
+
+| Choice | Purpose |
+|---|---|
+| **Next.js 15 (App Router)** | Full-stack React framework with SSR and API routes |
+| **TypeScript** | Type safety across the stack |
+| **Tailwind CSS + shadcn/ui** | Mobile-first styling, clean reusable components |
+| **TanStack Query (React Query)** | Data fetching, caching, optimistic updates for live list views |
+| **next-pwa** | Installable PWA experience — no app store friction |
+
+**Rationale:** PWA chosen over native (React Native/Flutter) because the use case is form entry + list views + notifications, which don't require native APIs. Single codebase, instant updates.
+
+### 12.2 Backend
+
+| Choice | Purpose |
+|---|---|
+| **Next.js API Routes / Route Handlers** | Co-located with frontend, sufficient for MVP traffic |
+| **Node.js + TypeScript** | Shared types with frontend |
+| **Zod** | Runtime validation for API inputs (UTR format, event config, etc.) |
+
+### 12.3 Database — PostgreSQL
+
+**Why Postgres:**
+- Transactional integrity is critical for slot ordering, state transitions, and duplicate UTR detection
+- `FOR UPDATE SKIP LOCKED` for race-free slot claiming
+- Native timestamp types and constraints for server-side ordering
+- Relational model fits entities (Event, User, Payment, MainList, WaitingList)
+
+**Hosted options:** Supabase (recommended), Neon, Railway
+**ORM:** Drizzle (lightweight) or Prisma
+
+### 12.4 Caching & Ephemeral State — Redis
+
+Used for:
+- Slot reservations (10-min TTL) — key auto-expires
+- OTP storage (5-min TTL)
+- Rate limiting (OTP requests, UTR submissions)
+- Pub/sub for real-time updates (if not using Supabase Realtime)
+
+**Hosted:** Upstash Redis (serverless, pay-per-request)
+
+### 12.5 Authentication (OTP-based)
+
+| Option | Recommendation |
+|---|---|
+| **Supabase Auth** | Best if using Supabase for DB — phone OTP built-in |
+| **MSG91 + custom JWT** | India-optimized SMS, cheapest rates, full control |
+| **Firebase Auth** | Mature alternative with generous free tier |
+
+For temporary accounts: store `account_type: 'guest'` and `expires_at` field. Scheduled job handles deletion 15 min after linked event's close time (BR-21).
+
+### 12.6 Real-Time Updates (Live List Sync)
+
+| Option | Fit |
+|---|---|
+| **Supabase Realtime** | Recommended — Postgres changes stream directly to clients |
+| Pusher / Ably | Managed WebSocket alternative |
+| Socket.io | Self-hosted WebSockets |
+| SSE (Server-Sent Events) | Simpler option for one-way updates |
+
+### 12.7 Push Notifications
+
+| Option | Notes |
+|---|---|
+| **OneSignal** | Recommended for MVP — easy integration, good free tier |
+| Firebase Cloud Messaging (FCM) | Alternative with broader ecosystem |
+| Web Push API (native) | DIY approach via `web-push` library |
+
+### 12.8 Background Jobs (Critical)
+
+Needed for:
+- Slot reservation expiry (10 min)
+- Promotion payment window expiry (dynamic: 15 min – 2 hrs)
+- Temp account deletion (15 min after event close)
+- Auto-close / archive events
+- Deadline enforcement
+
+| Option | Recommendation |
+|---|---|
+| **Inngest** | Recommended — event-driven, durable, great DX |
+| Trigger.dev | Similar durable workflow engine |
+| pg_cron (Supabase) | Simple, runs inside Postgres |
+| BullMQ + Redis | Self-hosted, more control |
+
+### 12.9 Deployment
+
+| Layer | Service |
+|---|---|
+| Frontend + API | Vercel |
+| Postgres | Supabase or Neon |
+| Redis | Upstash |
+| Scheduled Jobs | Inngest |
+| Push Notifications | OneSignal |
+
+All have generous free tiers — MVP can run at near-zero cost until scale is needed.
+
+### 12.10 Recommended MVP Stack (Summary)
+
+```
+Next.js 15 + TypeScript + Tailwind + shadcn/ui   (app)
+Supabase                                          (DB + Auth + Realtime)
+Upstash Redis                                     (reservations + OTP cache)
+Inngest                                           (scheduled jobs)
+OneSignal                                         (push notifications)
+Vercel                                            (hosting)
+```
+
+### 12.11 Deliberately Excluded (for MVP)
+
+| Not Using | Reason |
+|---|---|
+| MongoDB / NoSQL | Data is inherently relational and transactional |
+| Native mobile (React Native / Flutter) | PWA satisfies the use case |
+| Microservices | Premature for the current scope |
+| GraphQL | REST / tRPC is simpler and sufficient |
+| Kafka / event streaming | Not needed at this scale |
+| WhatsApp Business API | WhatsApp is handled externally by hosts (BR-18) |
+
+### 12.12 Phase 2 Candidates
+
+- **UPI Gateway Integration** — Razorpay / Cashfree for automated UTR verification and in-app refunds
+- **Observability** — Sentry (errors) + Axiom/Logtail (logs) + PostHog (analytics)
+- **WhatsApp Business API** — Only if in-app WhatsApp integration becomes a need (currently out of scope)
+
+---
+
+*All open questions, new considerations, and preliminary tech stack recommendations captured. This document is ready for technical design phase.*
