@@ -77,9 +77,10 @@ Two authentication modes are supported:
 
 1. Participant opens the app and views event details (venue, date, time, payment amount, UPI ID).
 2. Participant makes payment **externally** via any UPI app to the displayed UPI ID.
-3. Participant enters the **UTR (Unique Transaction Reference)** number in the app.
-4. The **server-side timestamp** of UTR submission determines the participant's position in the main list.
-5. **Slot reservation:** If the main list is nearly full (e.g., last few slots), when a participant initiates UTR entry, a slot is **reserved for 10 minutes**. If UTR is not submitted within 10 minutes, the reservation expires and the slot reopens.
+3. Participant **uploads a screenshot** of the payment confirmation in the app.
+4. The **server-side timestamp** of screenshot upload determines the participant's position in the main list.
+5. Upon successful upload → participant is **instantly confirmed** on the main list (trust-based, closed community model). No further verification required.
+6. **Slot reservation:** If the main list is nearly full, when a participant initiates screenshot upload, a slot is **reserved for 10 minutes**. If the upload is not completed within 10 minutes, the reservation expires and the slot reopens.
 
 ### 4.3 Waiting List
 
@@ -93,9 +94,9 @@ Two authentication modes are supported:
 
 1. A main list participant may **withdraw** before the deadline.
 2. If multiple members drop simultaneously, **all corresponding waiting list members are notified at once**, but strict waiting list order is maintained (first in line gets first slot, second gets second, etc.).
-3. The promoted waiting list member must pay and submit their UTR within a **dynamic time window** (see Section 4.5).
-4. If the promoted member does **not** pay within the window, their promotion expires and the **next waiting list member** is notified.
-5. Upon UTR confirmation, the waiting list member is added to the main list.
+3. The promoted waiting list member must pay and upload a payment screenshot within a **dynamic time window** (see Section 4.5).
+4. If the promoted member does **not** upload within the window, their promotion expires and the **next waiting list member** is notified.
+5. Upon screenshot upload, the waiting list member is instantly confirmed on the main list.
 6. The withdrawn participant becomes eligible for a refund (processed post-deadline — see 4.7).
 
 ### 4.5 Promotion Payment Window (Dynamic)
@@ -127,16 +128,21 @@ The time given to a promoted waiting list member to complete payment scales base
 - **Phase 1 (MVP):** Refunds tracked in-app, processed manually by host outside the app. App tracks status: `refund_pending` → `refunded`.
 - **Phase 2 (Future):** Automated in-app UPI refund processing (pending complexity assessment).
 
-### 4.8 UTR Validation
+### 4.8 Payment Confirmation (Screenshot Upload)
 
-- **Phase 1 (MVP):** Trust-based with **duplicate detection**.
-  - Participant self-reports the UTR number.
-  - App checks for **duplicate UTR entries** across all events — rejects duplicates.
-  - UTR format validation (standard UTR is 12-digit alphanumeric).
-  - Host can flag/dispute suspicious UTRs manually.
-- **Phase 2 (Future):** Automated UTR verification against UPI transaction records via payment gateway API (pending feasibility and cost assessment).
+- **Model:** Trust-based, closed community.
+- Participant uploads a screenshot of their UPI payment confirmation (from GPay, PhonePe, Paytm, etc.).
+- Upload is **sufficient** to confirm the slot — no further verification required.
+- **Server-side timestamp of upload** is the order determinant for main list position.
+- **File requirements:**
+  - Image formats: JPG, PNG, WebP
+  - Max file size: 5 MB
+  - Uploaded screenshots are stored securely and visible to host/co-hosts for audit
+- **Host dispute flow:** If a host suspects a fraudulent/reused screenshot, they can manually flag the participant and remove them. The slot reopens and waiting list promotion kicks in.
+- **No manual UTR entry required** — removing friction is the explicit design goal.
+- **Phase 2 (Future, Optional):** OCR-based UTR extraction from screenshots for duplicate detection or payment gateway integration for full automated verification (only if abuse becomes a real problem).
 
-**Suggestion:** Duplicate detection + format validation covers the most common abuse vectors at low complexity. Full UPI verification requires payment gateway integration which adds significant scope — better suited for a later phase.
+**Rationale:** The target user base is a closed community (badminton regulars) where social trust is high and fake screenshots would have immediate reputational consequences. Screenshot upload provides a visible, auditable proof-of-payment without requiring manual UTR entry or paid payment gateway integration.
 
 ### 4.9 List Visibility
 
@@ -165,11 +171,11 @@ The time given to a promoted waiting list member to complete payment scales base
 ```
 [New User]
     │
-    ├──(Main list has space)──► SLOT_RESERVED (10 min to submit UTR)
+    ├──(Main list has space)──► SLOT_RESERVED (10 min to upload screenshot)
     │                               │
     │                    ┌──────────┴──────────┐
     │                    │                     │
-    │          (UTR submitted in time)  (10 min expires)
+    │        (Screenshot uploaded)     (10 min expires)
     │                    │                     │
     │                    ▼                     ▼
     │          MAIN_LIST_CONFIRMED      RESERVATION_EXPIRED
@@ -181,7 +187,7 @@ The time given to a promoted waiting list member to complete payment scales base
                                 │
                     ┌───────────┴───────────┐
                     │                       │
-          (Pays within window)    (Does not pay in time)
+     (Uploads screenshot in window)   (Does not upload in time)
                     │                       │
                     ▼                       ▼
           MAIN_LIST_CONFIRMED        PROMOTION_EXPIRED
@@ -195,7 +201,9 @@ MAIN_LIST_CONFIRMED
     │
     ├──(Withdraws pre-deadline)──► DROPPED_REFUND_PENDING ──► REFUNDED
     │
-    └──(Withdraws post-deadline)──► DROPPED_NO_REFUND
+    ├──(Withdraws post-deadline)──► DROPPED_NO_REFUND
+    │
+    └──(Host flags as fraudulent)──► REMOVED (slot reopens, WL promotion triggered)
 
 EVENT_CANCELLED (by host)
     │
@@ -209,11 +217,12 @@ EVENT_CANCELLED (by host)
 | Status | Meaning |
 |---|---|
 | `not_required` | Waiting list member — no payment needed yet |
-| `awaiting_utr` | Slot reserved or promoted — UTR submission expected within time window |
-| `confirmed` | UTR submitted and accepted |
+| `awaiting_upload` | Slot reserved or promoted — screenshot upload expected within time window |
+| `confirmed` | Screenshot uploaded and slot confirmed |
 | `refund_pending` | Dropped pre-deadline or event cancelled — refund owed but not yet processed |
 | `refunded` | Refund completed |
 | `forfeited` | Dropped post-deadline — no refund |
+| `flagged` | Host flagged payment as fraudulent — participant removed from main list |
 
 ---
 
@@ -221,22 +230,23 @@ EVENT_CANCELLED (by host)
 
 | # | Rule |
 |---|---|
-| BR-1 | Main list order is determined by server-side timestamp of UTR submission |
+| BR-1 | Main list order is determined by server-side timestamp of payment screenshot upload |
 | BR-2 | Waiting list order is determined by server-side timestamp of interest registration |
 | BR-3 | Waiting list members do not pay upfront |
 | BR-4 | When a main list member drops pre-deadline, the first waiting list member is notified |
-| BR-5 | Promoted waiting list member must pay within a dynamic time window based on proximity to event |
+| BR-5 | Promoted waiting list member must upload payment screenshot within a dynamic time window based on proximity to event |
 | BR-6 | Post-deadline: no drops with refund, no waiting list promotions |
 | BR-7 | Refunds are processed only after deadline passes AND all slots are confirmed |
 | BR-8 | Event capacity is between 20 and 36 participants |
-| BR-9 | Slot reservation lasts 10 minutes for UTR submission when main list is nearly full |
-| BR-10 | Duplicate UTR numbers are rejected across all events |
+| BR-9 | Slot reservation lasts 10 minutes for screenshot upload when main list is nearly full |
+| BR-10 | Payment confirmation is trust-based — screenshot upload is sufficient, no further verification |
 | BR-11 | Host can edit event details anytime before the deadline |
 | BR-12 | Multiple simultaneous drops notify multiple waiting list members at once, in strict order |
 | BR-13 | Waiting list auto-reorders when a member voluntarily leaves |
 | BR-14 | Events auto-close at host-defined time and move to archive |
 | BR-15 | Host can cancel an event at any time; all confirmed participants receive refunds |
 | BR-16 | Participants can be on main/waiting lists of multiple events simultaneously |
+| BR-22 | Host can manually flag and remove participants for fraudulent payment screenshots; slot reopens |
 
 ---
 
@@ -246,13 +256,13 @@ EVENT_CANCELLED (by host)
 |---|---|---|
 | Q1 | Authentication | Two modes: Regular (persistent account, phone+OTP+password) and Temporary (phone+OTP per session) |
 | Q2 | Host editing | Allowed anytime before deadline; frozen after deadline |
-| Q3 | Full list + payment already made | 10-minute slot reservation when initiating UTR entry prevents race condition |
+| Q3 | Full list + payment already made | 10-minute slot reservation when initiating screenshot upload prevents race condition |
 | Q4 | Multi-event participation | Yes — participants can be on main/waiting lists of multiple events; order based on timestamps |
 | Q5 | Promotion payment window | Dynamic: 2hr / 1hr / 30min / 15min based on time until event. Expires → next person notified |
-| Q6 | Notification channels | Push notifications + WhatsApp for critical alerts |
+| Q6 | Notification channels | Push notifications in-app; WhatsApp handled externally (out of app scope) |
 | Q7 | Refund processing | Phase 1: manual (tracked in-app). Phase 2: automated in-app UPI refunds |
-| Q8 | UTR validation | Phase 1: trust-based + duplicate detection + format validation. Phase 2: UPI gateway verification |
-| Q9 | Fake/duplicate UTR | Duplicate detection across all events + format validation in Phase 1 |
+| Q8 | Payment verification | Revised: screenshot upload is sufficient (trust-based, closed community). No UTR entry required. Host can flag fraudulent uploads |
+| Q9 | Fake payment prevention | Social accountability + host manual flagging in Phase 1; optional OCR/gateway verification in Phase 2 |
 | Q10 | Post-event lifecycle | Host sets auto-close time at creation; event auto-closes and archives |
 | Q11 | Event cancellation | Yes, host can cancel; all confirmed participants get refunds |
 | Q12 | Co-hosts | Yes, multiple co-hosts supported with equivalent permissions |
@@ -339,10 +349,27 @@ EVENT_CANCELLED (by host)
 Used for:
 - Slot reservations (10-min TTL) — key auto-expires
 - OTP storage (5-min TTL)
-- Rate limiting (OTP requests, UTR submissions)
+- Rate limiting (OTP requests, screenshot uploads)
 - Pub/sub for real-time updates (if not using Supabase Realtime)
 
 **Hosted:** Upstash Redis (serverless, pay-per-request)
+
+### 12.4b Object Storage (Payment Screenshots)
+
+Payment screenshots need durable, secure storage with per-user access control.
+
+| Option | Purpose |
+|---|---|
+| **Supabase Storage** | Recommended — tightly integrated with Supabase Auth and DB (row-level security on files) |
+| Cloudflare R2 | Free egress, S3-compatible, good for scale |
+| AWS S3 | Industry standard, pay-per-use |
+
+**Expected storage footprint:** ~500KB/screenshot × 36 participants × N events ≈ negligible for MVP.
+
+**Access control:** Screenshots visible to:
+- The uploader (participant)
+- Host & co-hosts of the event
+- Not visible to other participants
 
 ### 12.5 Authentication (OTP-based)
 
