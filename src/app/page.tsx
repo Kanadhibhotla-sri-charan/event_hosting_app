@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
@@ -8,14 +9,11 @@ export default function Home() {
         <p className="text-muted-foreground text-lg">
           Organize badminton games. Track payments. Manage waiting lists.
         </p>
-        <div className="flex flex-col gap-3 w-full">
+        <Link href="/auth/login" className="block">
           <Button size="lg" className="w-full">
-            Create Event
+            Get started
           </Button>
-          <Button size="lg" variant="outline" className="w-full">
-            Join Event
-          </Button>
-        </div>
+        </Link>
       </div>
     </main>
   );
