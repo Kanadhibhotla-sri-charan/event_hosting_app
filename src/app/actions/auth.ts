@@ -9,12 +9,6 @@ const emailSchema = z.object({
   accountType: z.enum(["regular", "guest"]).default("regular"),
 });
 
-const otpSchema = z.object({
-  email: z.string().email(),
-  token: z.string().length(6, "OTP must be 6 digits"),
-  accountType: z.enum(["regular", "guest"]).default("regular"),
-});
-
 export type AuthState = {
   error?: string;
   success?: boolean;
@@ -22,7 +16,7 @@ export type AuthState = {
   accountType?: "regular" | "guest";
 };
 
-export async function sendOtp(
+export async function sendLoginLink(
   _prev: AuthState,
   formData: FormData
 ): Promise<AuthState> {
@@ -40,7 +34,10 @@ export async function sendOtp(
 
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: true },
+    options: {
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      data: { accountType },
+    },
   });
 
   if (error) {
@@ -48,42 +45,6 @@ export async function sendOtp(
   }
 
   return { success: true, email, accountType };
-}
-
-export async function verifyOtp(
-  _prev: AuthState,
-  formData: FormData
-): Promise<AuthState> {
-  const parsed = otpSchema.safeParse({
-    email: formData.get("email"),
-    token: formData.get("token"),
-    accountType: formData.get("accountType") ?? "regular",
-  });
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
-  }
-
-  const { email, token, accountType } = parsed.data;
-  const supabase = await createClient();
-
-  const { error } = await supabase.auth.verifyOtp({
-    email,
-    token,
-    type: "email",
-  });
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/auth/sync-user`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, accountType }),
-  });
-
-  redirect("/events");
 }
 
 export async function signOut(): Promise<void> {

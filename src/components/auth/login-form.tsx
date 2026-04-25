@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { sendOtp, verifyOtp, type AuthState } from "@/app/actions/auth";
+import { useActionState } from "react";
+import { sendLoginLink, type AuthState } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,71 +9,32 @@ import { Label } from "@/components/ui/label";
 const initialState: AuthState = {};
 
 export function LoginForm() {
-  const [otpSent, setOtpSent] = useState(false);
-  const [emailData, setEmailData] = useState<{ email: string; accountType: "regular" | "guest" }>({ email: "", accountType: "regular" });
+  const [state, action, pending] = useActionState(sendLoginLink, initialState);
 
-  const [sendState, sendAction, sendPending] = useActionState(
-    async (prev: AuthState, formData: FormData) => {
-      const result = await sendOtp(prev, formData);
-      if (result.success && result.email) {
-        setEmailData({
-          email: result.email,
-          accountType: (result.accountType ?? "regular"),
-        });
-        setOtpSent(true);
-      }
-      return result;
-    },
-    initialState
-  );
-
-  const [verifyState, verifyAction, verifyPending] = useActionState(
-    verifyOtp,
-    initialState
-  );
-
-  if (otpSent) {
+  if (state.success) {
     return (
-      <form action={verifyAction} className="space-y-4">
-        <input type="hidden" name="email" value={emailData.email} />
-        <input type="hidden" name="accountType" value={emailData.accountType} />
-
-        <div className="space-y-2">
-          <Label htmlFor="token">Enter the 6-digit OTP sent to {emailData.email}</Label>
-          <Input
-            id="token"
-            name="token"
-            type="text"
-            inputMode="numeric"
-            maxLength={6}
-            placeholder="000000"
-            className="text-center text-lg tracking-widest"
-            autoFocus
-            required
-          />
-        </div>
-
-        {verifyState.error && (
-          <p className="text-sm text-destructive">{verifyState.error}</p>
-        )}
-
-        <Button type="submit" className="w-full" disabled={verifyPending}>
-          {verifyPending ? "Verifying…" : "Verify OTP"}
-        </Button>
-
-        <button
-          type="button"
-          onClick={() => setOtpSent(false)}
-          className="w-full text-sm text-muted-foreground underline-offset-4 hover:underline"
-        >
-          Use a different email
-        </button>
-      </form>
+      <div className="rounded-lg border p-6 text-center space-y-2">
+        <p className="font-medium">Check your email</p>
+        <p className="text-sm text-muted-foreground">
+          We sent a login link to <span className="font-medium text-foreground">{state.email}</span>.
+          Click it to sign in.
+        </p>
+        <p className="text-xs text-muted-foreground pt-2">
+          Didn&apos;t get it? Check spam or{" "}
+          <button
+            onClick={() => window.location.reload()}
+            className="underline underline-offset-4"
+          >
+            try again
+          </button>
+          .
+        </p>
+      </div>
     );
   }
 
   return (
-    <form action={sendAction} className="space-y-4">
+    <form action={action} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="email">Email address</Label>
         <Input
@@ -106,12 +67,12 @@ export function LoginForm() {
         </div>
       </div>
 
-      {sendState.error && (
-        <p className="text-sm text-destructive">{sendState.error}</p>
+      {state.error && (
+        <p className="text-sm text-destructive">{state.error}</p>
       )}
 
-      <Button type="submit" className="w-full" disabled={sendPending}>
-        {sendPending ? "Sending OTP…" : "Send OTP"}
+      <Button type="submit" className="w-full" disabled={pending}>
+        {pending ? "Sending…" : "Send login link"}
       </Button>
     </form>
   );
