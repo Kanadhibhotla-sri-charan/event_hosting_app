@@ -38,7 +38,10 @@ export async function sendOtp(
   const { email, accountType } = parsed.data;
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signInWithOtp({ email });
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true },
+  });
 
   if (error) {
     return { error: error.message };
