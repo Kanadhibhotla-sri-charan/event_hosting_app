@@ -22,7 +22,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     .select({
       id: participants.id,
       name: users.name,
-      phone: users.phone,
+      email: users.email,
       position: participants.mainListPosition,
       status: participants.status,
       paymentStatus: participants.paymentStatus,
@@ -37,7 +37,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
     .select({
       id: participants.id,
       name: users.name,
-      phone: users.phone,
+      email: users.email,
       position: participants.waitingListPosition,
       status: participants.status,
       registeredAt: participants.interestRegisteredAt,
@@ -138,7 +138,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         title={`Main list (${mainList.length}/${event.maxMainList})`}
         entries={mainList.map((p) => ({
           id: p.id,
-          display: p.name ?? p.phone,
+          display: p.name ?? p.email,
           position: p.position ?? undefined,
           badge: p.status,
         }))}
@@ -149,7 +149,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         title={`Waiting list (${waitingList.length}/${event.maxWaitingList})`}
         entries={waitingList.map((p) => ({
           id: p.id,
-          display: p.name ?? p.phone,
+          display: p.name ?? p.email,
           position: p.position ?? undefined,
           badge: "waiting",
         }))}

@@ -10,14 +10,14 @@ const initialState: AuthState = {};
 
 export function LoginForm() {
   const [otpSent, setOtpSent] = useState(false);
-  const [phoneData, setPhoneData] = useState<{ phone: string; accountType: "regular" | "guest" }>({ phone: "", accountType: "regular" });
+  const [emailData, setEmailData] = useState<{ email: string; accountType: "regular" | "guest" }>({ email: "", accountType: "regular" });
 
   const [sendState, sendAction, sendPending] = useActionState(
     async (prev: AuthState, formData: FormData) => {
       const result = await sendOtp(prev, formData);
-      if (result.success && result.phone) {
-        setPhoneData({
-          phone: result.phone,
+      if (result.success && result.email) {
+        setEmailData({
+          email: result.email,
           accountType: (result.accountType ?? "regular"),
         });
         setOtpSent(true);
@@ -35,11 +35,11 @@ export function LoginForm() {
   if (otpSent) {
     return (
       <form action={verifyAction} className="space-y-4">
-        <input type="hidden" name="phone" value={phoneData.phone} />
-        <input type="hidden" name="accountType" value={phoneData.accountType} />
+        <input type="hidden" name="email" value={emailData.email} />
+        <input type="hidden" name="accountType" value={emailData.accountType} />
 
         <div className="space-y-2">
-          <Label htmlFor="token">Enter the 6-digit OTP sent to {phoneData.phone}</Label>
+          <Label htmlFor="token">Enter the 6-digit OTP sent to {emailData.email}</Label>
           <Input
             id="token"
             name="token"
@@ -66,7 +66,7 @@ export function LoginForm() {
           onClick={() => setOtpSent(false)}
           className="w-full text-sm text-muted-foreground underline-offset-4 hover:underline"
         >
-          Use a different number
+          Use a different email
         </button>
       </form>
     );
@@ -75,18 +75,15 @@ export function LoginForm() {
   return (
     <form action={sendAction} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="phone">Phone number</Label>
+        <Label htmlFor="email">Email address</Label>
         <Input
-          id="phone"
-          name="phone"
-          type="tel"
-          placeholder="+91XXXXXXXXXX"
+          id="email"
+          name="email"
+          type="email"
+          placeholder="you@example.com"
           autoFocus
           required
         />
-        <p className="text-xs text-muted-foreground">
-          Include country code, e.g. +91 for India
-        </p>
       </div>
 
       <div className="space-y-2">

@@ -7,7 +7,7 @@ export default function LoginPage() {
         <div className="text-center space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">CourtSync</h1>
           <p className="text-sm text-muted-foreground">
-            Enter your phone number to continue
+            Enter your email to continue
           </p>
         </div>
         <LoginForm />

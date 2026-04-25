@@ -6,12 +6,12 @@ import { eq } from "drizzle-orm";
 export async function getCurrentUser() {
   const supabase = await createClient();
   const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser?.phone) return null;
+  if (!authUser?.email) return null;
 
   const [user] = await db
     .select()
     .from(users)
-    .where(eq(users.phone, authUser.phone))
+    .where(eq(users.email, authUser.email))
     .limit(1);
 
   return user ?? null;

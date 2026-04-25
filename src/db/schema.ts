@@ -51,7 +51,7 @@ export const paymentStatusEnum = pgEnum("payment_status", [
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  phone: text("phone").notNull().unique(),
+  email: text("email").notNull().unique(),
   name: text("name"),
   accountType: accountTypeEnum("account_type").notNull().default("regular"),
   // For guest accounts: auto-delete 15 min after last linked event's close time

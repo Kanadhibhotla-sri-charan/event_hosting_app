@@ -11,9 +11,8 @@ const supabaseAdmin = createSupabaseAdmin(
 
 export async function POST(request: Request) {
   try {
-    const { phone, accountType } = await request.json();
+    const { email, accountType } = await request.json();
 
-    // Verify the caller is actually authenticated (get current user from Supabase)
     const authHeader = request.headers.get("authorization");
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
@@ -24,11 +23,11 @@ export async function POST(request: Request) {
     const existing = await db
       .select()
       .from(users)
-      .where(eq(users.phone, phone))
+      .where(eq(users.email, email))
       .limit(1);
 
     if (existing.length === 0) {
-      await db.insert(users).values({ phone, accountType });
+      await db.insert(users).values({ email, accountType });
     }
 
     return NextResponse.json({ ok: true });

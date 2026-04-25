@@ -28,7 +28,7 @@ export default async function EventsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">CourtSync</h1>
-          <p className="text-xs text-muted-foreground">{user?.phone}</p>
+          <p className="text-xs text-muted-foreground">{user?.email}</p>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/events/new">
